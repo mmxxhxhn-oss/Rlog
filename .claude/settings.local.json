@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run:*)",
+      "Bash(git init:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git reset:*)",
+      "Bash(npx create-next-app@latest . --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --no-git --use-npm)",
+      "Read(//d D:/**)",
+      "Bash(npx create-next-app@latest tech-knowledge-platform --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --no-git --use-npm)",
+      "Bash(npx create-next-app@latest:*)",
+      "Bash(cp -r \"D:/aigc/tech-knowledge-platform/.\" \"D:/aigc/aiblog/\")",
+      "Bash(rm -rf \"D:/aigc/tech-knowledge-platform\")",
+      "Bash(npm install:*)",
+      "Bash(npx shadcn@latest add button card badge input textarea -y)",
+      "Bash(npx shadcn@latest add dialog dropdown-menu select tabs separator scroll-area sheet tooltip avatar -y)",
+      "Bash(mkdir:*)",
+      "Bash(node -e \"const l = require\\('lucide-react'\\); console.log\\(Object.keys\\(l\\).filter\\(k => k.toLowerCase\\(\\).includes\\('github'\\)\\).slice\\(0, 10\\)\\)\")",
+      "Bash(node -e \"const l = require\\('lucide-react'\\); const keys = Object.keys\\(l\\); console.log\\(keys.filter\\(k => /git/i.test\\(k\\)\\).join\\('\\\\n'\\)\\)\")",
+      "Bash(node -e \"const l = require\\('lucide-react'\\); const keys = Object.keys\\(l\\); console.log\\(keys.filter\\(k => /brand|social/i.test\\(k\\)\\).join\\('\\\\n'\\)\\)\")",
+      "Bash(node -e \"const l = require\\('lucide-react'\\); const keys = Object.keys\\(l\\); console.log\\(keys.filter\\(k => k.toLowerCase\\(\\).startsWith\\('g'\\)\\).join\\('\\\\n'\\)\\)\")",
+      "Skill(update-config)",
+      "WebSearch",
+      "mcp__context7__resolve-library-id",
+      "Bash(npx skills:*)",
+      "Bash(echo \"Command failed with exit code $?\")"
+    ]
+  }
+}
