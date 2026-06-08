@@ -15,6 +15,16 @@ export interface Tag {
   created_at: string
 }
 
+export interface Profile {
+  id: string
+  email: string
+  name: string | null
+  avatar_url: string | null
+  role: string
+  created_at: string
+  updated_at: string
+}
+
 export interface Article {
   id: string
   title: string
@@ -23,13 +33,15 @@ export interface Article {
   content: string
   cover_image: string | null
   category_id: string | null
-  category?: Category
-  tags?: Tag[]
+  user_id: string | null
   views: number
   reading_time: number
   published: boolean
+  deleted_at: string | null
   created_at: string
   updated_at: string
+  category?: Category
+  tags?: Tag[]
 }
 
 export interface LearningPath {
@@ -37,11 +49,11 @@ export interface LearningPath {
   title: string
   description: string | null
   category_id: string | null
-  category?: Category
   total_time: string | null
   color: string
-  chapters?: Chapter[]
   created_at: string
+  category?: Category
+  chapters?: Chapter[]
 }
 
 export interface Chapter {
@@ -50,9 +62,9 @@ export interface Chapter {
   title: string
   content: string | null
   article_id: string | null
-  article?: Article
   sort_order: number
   created_at: string
+  article?: Article
 }
 
 export interface Project {
@@ -75,15 +87,17 @@ export interface Demo {
   icon?: string
   content: string | null
   category_id: string | null
-  category?: Category
   created_at: string
+  category?: Category
 }
 
 export interface TechFeed {
   id: string
   content: string | null
   code_snippet: string | null
+  image_url: string | null
   likes: number
+  user_id: string | null
   created_at: string
 }
 
@@ -97,3 +111,15 @@ export type CategoryColor =
   | "purple"
   | "pink"
   | "indigo"
+
+// API Response types
+export interface ApiResponse<T> {
+  data?: T
+  error?: string
+}
+
+export interface UploadResult {
+  url: string
+  key: string
+  size: number
+}

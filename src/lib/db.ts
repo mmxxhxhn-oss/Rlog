@@ -136,6 +136,7 @@ export async function getArticles(options?: {
       category:categories(*),
       tags:article_tags(tag:tags(*))
     `)
+    .is("deleted_at", null) // Filter out soft-deleted articles
     .order("created_at", { ascending: false })
 
   if (options?.published !== undefined) {

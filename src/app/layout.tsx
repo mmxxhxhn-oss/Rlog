@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 import "./globals.css"
 import { ThemeProvider, Sidebar, Header } from "@/components/layout"
+import { AuthProvider } from "@/lib/auth"
 
 export const metadata: Metadata = {
   title: {
@@ -38,11 +39,13 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <Sidebar />
-          <Header />
-          <main className="lg:ml-64 lg:pt-16 pt-16 min-h-screen">
-            {children}
-          </main>
+          <AuthProvider>
+            <Sidebar />
+            <Header />
+            <main className="lg:ml-64 lg:pt-16 pt-16 min-h-screen">
+              {children}
+            </main>
+          </AuthProvider>
         </ThemeProvider>
       </body>
     </html>

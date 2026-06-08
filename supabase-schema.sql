@@ -1,5 +1,5 @@
 -- =============================================
--- AI Blog - Supabase Schema
+-- AI Blog - Supabase Schema (Updated)
 -- =============================================
 
 -- Enable UUID extension
@@ -8,6 +8,17 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- =============================================
 -- TABLES
 -- =============================================
+
+-- Profiles (extends Supabase Auth)
+CREATE TABLE profiles (
+  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  email TEXT NOT NULL,
+  name TEXT,
+  avatar_url TEXT,
+  role TEXT NOT NULL DEFAULT 'user',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 
 -- Categories
 CREATE TABLE categories (
@@ -28,7 +39,7 @@ CREATE TABLE tags (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Articles
+-- Articles (with soft delete and user_id)
 CREATE TABLE articles (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   title TEXT NOT NULL,
@@ -37,9 +48,11 @@ CREATE TABLE articles (
   content TEXT NOT NULL,
   cover_image TEXT,
   category_id UUID REFERENCES categories(id) ON DELETE SET NULL,
+  user_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
   views INTEGER DEFAULT 0,
   reading_time INTEGER DEFAULT 0,
   published BOOLEAN DEFAULT FALSE,
+  deleted_at TIMESTAMPTZ, -- Soft delete
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -103,7 +116,9 @@ CREATE TABLE tech_feed (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   content TEXT,
   code_snippet TEXT,
+  image_url TEXT,
   likes INTEGER DEFAULT 0,
+  user_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -111,6 +126,7 @@ CREATE TABLE tech_feed (
 -- ROW LEVEL SECURITY (RLS)
 -- =============================================
 
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tags ENABLE ROW LEVEL SECURITY;
 ALTER TABLE articles ENABLE ROW LEVEL SECURITY;
@@ -121,16 +137,119 @@ ALTER TABLE projects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE demos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tech_feed ENABLE ROW LEVEL SECURITY;
 
--- Public read policies (for anon and authenticated users)
+-- Profiles: users can read all, update only own
+CREATE POLICY "Public read profiles" ON profiles FOR SELECT TO anon, authenticated USING (true);
+CREATE POLICY "Users can update own profile" ON profiles FOR UPDATE TO authenticated USING (auth.uid() = id);
+
+-- Categories: public read
 CREATE POLICY "Public read categories" ON categories FOR SELECT TO anon, authenticated USING (true);
+CREATE POLICY "Admin can insert categories" ON categories FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY "Admin can update categories" ON categories FOR UPDATE TO authenticated USING (true);
+CREATE POLICY "Admin can delete categories" ON categories FOR DELETE TO authenticated USING (true);
+
+-- Tags: public read
 CREATE POLICY "Public read tags" ON tags FOR SELECT TO anon, authenticated USING (true);
-CREATE POLICY "Public read articles" ON articles FOR SELECT TO anon, authenticated USING (true);
+CREATE POLICY "Admin can manage tags" ON tags FOR ALL TO authenticated USING (true);
+
+-- Articles: public read (non-deleted), auth write (own articles)
+CREATE POLICY "Public read published articles" ON articles FOR SELECT TO anon, authenticated
+  USING (published = true AND deleted_at IS NULL);
+CREATE POLICY "Users can read own articles" ON articles FOR SELECT TO authenticated
+  USING (user_id = auth.uid());
+CREATE POLICY "Users can insert articles" ON articles FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY "Users can update own articles" ON articles FOR UPDATE TO authenticated
+  USING (user_id = auth.uid());
+CREATE POLICY "Users can delete own articles (soft)" ON articles FOR UPDATE TO authenticated
+  USING (user_id = auth.uid());
+
+-- Article Tags: public read
 CREATE POLICY "Public read article_tags" ON article_tags FOR SELECT TO anon, authenticated USING (true);
+CREATE POLICY "Users can manage article_tags" ON article_tags FOR ALL TO authenticated USING (true);
+
+-- Learning Paths: public read
 CREATE POLICY "Public read learning_paths" ON learning_paths FOR SELECT TO anon, authenticated USING (true);
+CREATE POLICY "Admin can manage learning_paths" ON learning_paths FOR ALL TO authenticated USING (true);
+
+-- Chapters: public read
 CREATE POLICY "Public read chapters" ON chapters FOR SELECT TO anon, authenticated USING (true);
+CREATE POLICY "Admin can manage chapters" ON chapters FOR ALL TO authenticated USING (true);
+
+-- Projects: public read
 CREATE POLICY "Public read projects" ON projects FOR SELECT TO anon, authenticated USING (true);
+CREATE POLICY "Admin can manage projects" ON projects FOR ALL TO authenticated USING (true);
+
+-- Demos: public read
 CREATE POLICY "Public read demos" ON demos FOR SELECT TO anon, authenticated USING (true);
+CREATE POLICY "Admin can manage demos" ON demos FOR ALL TO authenticated USING (true);
+
+-- Tech Feed: public read, auth create (own)
 CREATE POLICY "Public read tech_feed" ON tech_feed FOR SELECT TO anon, authenticated USING (true);
+CREATE POLICY "Users can insert tech_feed" ON tech_feed FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY "Users can update own tech_feed" ON tech_feed FOR UPDATE TO authenticated USING (user_id = auth.uid());
+
+-- =============================================
+-- FUNCTIONS
+-- =============================================
+
+-- Function to handle new user signup
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO public.profiles (id, email, name)
+  VALUES (NEW.id, NEW.email, COALESCE(NEW.raw_user_meta_data->>'name', split_part(NEW.email, '@', 1)));
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Trigger to create profile on signup
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- Function to auto-generate slug from title
+CREATE OR REPLACE FUNCTION generate_slug(title TEXT)
+RETURNS TEXT AS $$
+DECLARE
+  base_slug TEXT;
+  final_slug TEXT;
+  counter INTEGER := 0;
+BEGIN
+  -- Convert to lowercase, replace spaces with hyphens, remove special chars
+  base_slug := lower(regexp_replace(title, '[^a-zA-Z0-9\u4e00-\u9fa5]+', '-', 'g'));
+  base_slug := trim(BOTH '-' FROM base_slug);
+  final_slug := base_slug;
+
+  -- Check for uniqueness
+  WHILE EXISTS (SELECT 1 FROM articles WHERE slug = final_slug) LOOP
+    counter := counter + 1;
+    final_slug := base_slug || '-' || counter;
+  END LOOP;
+
+  RETURN final_slug;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to update updated_at timestamp
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger for articles updated_at
+DROP TRIGGER IF EXISTS update_articles_updated_at ON articles;
+CREATE TRIGGER update_articles_updated_at
+  BEFORE UPDATE ON articles
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Trigger for profiles updated_at
+DROP TRIGGER IF EXISTS update_profiles_updated_at ON profiles;
+CREATE TRIGGER update_profiles_updated_at
+  BEFORE UPDATE ON profiles
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- =============================================
 -- INDEXES
@@ -139,13 +258,16 @@ CREATE POLICY "Public read tech_feed" ON tech_feed FOR SELECT TO anon, authentic
 CREATE INDEX idx_articles_slug ON articles(slug);
 CREATE INDEX idx_articles_category_id ON articles(category_id);
 CREATE INDEX idx_articles_published ON articles(published);
+CREATE INDEX idx_articles_deleted_at ON articles(deleted_at);
+CREATE INDEX idx_articles_user_id ON articles(user_id);
 CREATE INDEX idx_articles_created_at ON articles(created_at DESC);
 CREATE INDEX idx_tags_slug ON tags(slug);
 CREATE INDEX idx_chapters_path_id ON chapters(path_id);
 CREATE INDEX idx_chapters_sort_order ON chapters(sort_order);
+CREATE INDEX idx_tech_feed_user_id ON tech_feed(user_id);
 
 -- =============================================
--- SAMPLE DATA
+-- DEFAULT DATA
 -- =============================================
 
 -- Categories
@@ -170,7 +292,7 @@ INSERT INTO tags (id, name, slug, color, count, created_at) VALUES
   ('aaaa7777-a777-7777-7777-777777777777', '性能优化', 'optimization', 'pink', 28, NOW()),
   ('aaaa8888-a888-8888-8888-888888888888', 'OAuth2', 'oauth2', 'indigo', 12, NOW());
 
--- Articles
+-- Articles (now with user_id - will be null for existing)
 INSERT INTO articles (id, title, slug, excerpt, content, cover_image, category_id, views, reading_time, published, created_at, updated_at) VALUES
   ('b1111111-b111-1111-1111-111111111111', '深入理解 JVM 类加载机制', 'jvm-classloader', '详细解析 JVM 类加载的全过程，包括加载、验证、准备、解析和初始化五个阶段，以及双亲委派模型的实现原理。', '## 引言
 
@@ -275,3 +397,20 @@ public class SecurityConfig {
         return http.build();
     }
 }', 67, '2026-06-07T08:00:00Z');
+
+-- =============================================
+-- ADMIN USER (temporary - change password after setup!)
+-- Note: This creates an auth.users entry, but for email auth you need to use
+-- Supabase Dashboard > Authentication > Users > Create user
+-- or use the signup API. The SQL below is for reference only.
+-- =============================================
+
+-- To create admin user via SQL (if you have service role key):
+-- INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, raw_user_meta_data)
+-- VALUES (
+--   '00000000-0000-0000-0000-000000000001',
+--   'admin@example.com',
+--   crypt('admin123', gen_salt('bf')),
+--   NOW(),
+--   '{"name": "Admin"}'::jsonb
+-- );

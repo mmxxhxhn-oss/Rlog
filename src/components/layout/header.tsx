@@ -1,18 +1,26 @@
 "use client"
 
-import { Search, Moon, Sun, Globe, User } from "lucide-react"
+import { Search, Moon, Sun, LogIn, LogOut } from "lucide-react"
 import { useTheme } from "next-themes"
 import { useState, useEffect } from "react"
+import Link from "next/link"
+import { useAuth } from "@/lib/auth"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 
 export function Header() {
   const { theme, setTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
+  const { user, profile, signOut, loading } = useAuth()
 
   useEffect(() => {
     setMounted(true)
   }, [])
+
+  const handleSignOut = async () => {
+    await signOut()
+    window.location.href = "/"
+  }
 
   return (
     <header className="hidden lg:flex fixed top-0 right-0 left-64 h-16 border-b border-border bg-background/80 backdrop-blur-sm z-10">
@@ -42,19 +50,27 @@ export function Header() {
               )}
             </Button>
           )}
-          <a
-            href="https://github.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="p-2 hover:bg-accent rounded-lg transition-colors"
-          >
-            <Globe className="w-5 h-5 text-muted-foreground" />
-          </a>
-          <Button variant="ghost" size="icon" className="rounded-full">
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center">
-              <User className="w-5 h-5 text-white" />
-            </div>
-          </Button>
+
+          {!loading && (
+            <>
+              {user ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">
+                    {profile?.name || user.email}
+                  </span>
+                  <Button variant="ghost" size="icon" onClick={handleSignOut} title="退出登录">
+                    <LogOut className="w-5 h-5 text-muted-foreground" />
+                  </Button>
+                </div>
+              ) : (
+                <Link href="/login">
+                  <Button variant="ghost" size="icon" title="登录">
+                    <LogIn className="w-5 h-5 text-muted-foreground" />
+                  </Button>
+                </Link>
+              )}
+            </>
+          )}
         </div>
       </div>
     </header>

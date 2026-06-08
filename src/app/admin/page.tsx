@@ -24,7 +24,7 @@ export default async function AdminDashboard() {
     `)
     .order("created_at", { ascending: false })
 
-  const { data: stats } = await Promise.all([
+  const [articlesResult, categoriesResult] = await Promise.all([
     supabase.from("articles").select("id", { count: "exact" }),
     supabase.from("categories").select("id", { count: "exact" }),
   ])
@@ -51,7 +51,7 @@ export default async function AdminDashboard() {
             <FileText className="w-4 h-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats?.[0]?.count || 0}</div>
+            <div className="text-2xl font-bold">{articlesResult.count || 0}</div>
           </CardContent>
         </Card>
         <Card>
@@ -62,7 +62,7 @@ export default async function AdminDashboard() {
             <FileText className="w-4 h-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats?.[1]?.count || 0}</div>
+            <div className="text-2xl font-bold">{categoriesResult.count || 0}</div>
           </CardContent>
         </Card>
       </div>
