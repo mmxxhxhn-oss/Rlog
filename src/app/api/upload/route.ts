@@ -1,13 +1,19 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
-import { uploadToR2 } from "@/lib/r2"
+import { uploadFileToQiniu } from "@/lib/qiniu"
 
-// GET /api/upload - Check auth status
-export async function GET() {
-  return NextResponse.json({ error: "Method not allowed" }, { status: 405 })
-}
+// Allowed MIME types
+const ALLOWED_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/gif",
+  "image/webp",
+  "image/svg+xml",
+]
 
-// POST /api/upload - Upload image to R2
+const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
+
+// POST /api/upload - Upload image to Qiniu
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient()
@@ -28,10 +34,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 })
     }
 
-    // Upload to R2
-    const result = await uploadToR2(file, file.name, file.type, {
-      folder: "images",
-    })
+    // Validate file type
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      return NextResponse.json(
+        { error: `File type ${file.type} is not allowed` },
+        { status: 400 }
+      )
+    }
+
+    // Validate file size
+    if (file.size > MAX_FILE_SIZE) {
+      return NextResponse.json(
+        { error: `File size exceeds maximum allowed size of ${MAX_FILE_SIZE / 1024 / 1024}MB` },
+        { status: 400 }
+      )
+    }
+
+    // Upload to Qiniu
+    const result = await uploadFileToQiniu(file, file.name, "images")
 
     return NextResponse.json({
       url: result.url,
