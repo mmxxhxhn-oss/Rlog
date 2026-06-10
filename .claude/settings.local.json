@@ -24,7 +24,13 @@
       "WebSearch",
       "mcp__context7__resolve-library-id",
       "Bash(npx skills:*)",
-      "Bash(echo \"Command failed with exit code $?\")"
+      "Bash(echo \"Command failed with exit code $?\")",
+      "Bash(cat:*)",
+      "Bash(rm \"D:/aigc/github/Rlog/src/app/api/demo/[key]/route.ts\")",
+      "Bash(rmdir \"D:/aigc/github/Rlog/src/app/api/demo/[key]\")",
+      "Bash(curl -sI \"https://rlog.bfcdn.net/rlog/demos/test.html\")",
+      "Bash(curl -sI \"https://rlog.s3.bitiful.net/demos/1781066690465-rbw17wz-demoupload.html?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=7fTZgt0NskIib5ztQ80CYPtN%2F20260610%2Fcn-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260610T083543Z&X-Amz-Expires=3600&X-Amz-Signature=08c80ebb83a83ad047e601cd455b36d835e572b81f57177aa898626d77bd78e3&X-Amz-SignedHeaders=host&x-amz-checksum-mode=ENABLED&x-id=GetObject\")",
+      "Bash(curl -s \"https://rlog.s3.bitiful.net/demos/1781066690465-rbw17wz-demoupload.html?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=7fTZgt0NskIib5ztQ80CYPtN%2F20260610%2Fcn-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260610T083543Z&X-Amz-Expires=3600&X-Amz-Signature=08c80ebb83a83ad047e601cd455b36d835e572b81f57177aa898626d77bd78e3&X-Amz-SignedHeaders=host&x-amz-checksum-mode=ENABLED&x-id=GetObject\")"
     ]
   }
 }

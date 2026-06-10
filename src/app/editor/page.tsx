@@ -1,8 +1,9 @@
 "use client"
 
-import { useState, useEffect, use } from "react"
+import { use, useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
+import dynamic from "next/dynamic"
 import { useAuth } from "@/lib/auth"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,8 +11,14 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ArrowLeft, Save, Upload, X } from "lucide-react"
-import type { Category, Article } from "@/lib/db"
+import { ArrowLeft, Save, Upload, X, Loader2, Box, ImagePlus, Check } from "lucide-react"
+import type { Category } from "@/lib/db"
+
+// 动态导入 MD 编辑器，避免 SSR 问题
+const MdEditor = dynamic(
+  () => import("@uiw/react-md-editor").then((mod) => mod.default),
+  { ssr: false, loading: () => <div className="h-[600px] bg-muted/50 rounded-lg animate-pulse" /> }
+)
 
 export default function EditorPage({ searchParams }: { searchParams: Promise<{ id?: string }> }) {
   const params = use(searchParams)
@@ -19,7 +26,7 @@ export default function EditorPage({ searchParams }: { searchParams: Promise<{ i
   const { user, loading } = useAuth()
   const [categories, setCategories] = useState<Category[]>([])
   const [saving, setSaving] = useState(false)
-  const [uploading, setUploading] = useState(false)
+  const [uploadingImage, setUploadingImage] = useState(false)
 
   // Form state
   const [title, setTitle] = useState("")
@@ -30,6 +37,18 @@ export default function EditorPage({ searchParams }: { searchParams: Promise<{ i
   const [categoryId, setCategoryId] = useState("")
   const [published, setPublished] = useState(false)
 
+  // Image upload modal
+  const [imageModalOpen, setImageModalOpen] = useState(false)
+  const [imageModalData, setImageModalData] = useState<{ file: File } | null>(null)
+  const [imageUploading, setImageUploading] = useState(false)
+
+  // Demo insert modal
+  const [demoModalOpen, setDemoModalOpen] = useState(false)
+  const [demoIdInput, setDemoIdInput] = useState("")
+  const [demoUploading, setDemoUploading] = useState(false)
+
+  const imageInputRef = useRef<HTMLInputElement>(null)
+  const coverInputRef = useRef<HTMLInputElement>(null)
   const isEditing = !!params.id
 
   // Check auth and load data
@@ -39,17 +58,13 @@ export default function EditorPage({ searchParams }: { searchParams: Promise<{ i
       return
     }
 
-    // Load categories
     fetch("/api/categories")
       .then((res) => res.json())
       .then((data) => {
-        if (Array.isArray(data)) {
-          setCategories(data)
-        }
+        if (Array.isArray(data)) setCategories(data)
       })
       .catch(console.error)
 
-    // Load article if editing
     if (params.id) {
       fetch(`/api/articles/${params.id}`)
         .then((res) => res.json())
@@ -68,6 +83,36 @@ export default function EditorPage({ searchParams }: { searchParams: Promise<{ i
     }
   }, [user, loading, params.id, router])
 
+  // Handle paste for images
+  const handlePaste = async (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items
+    if (!items) return
+
+    for (const item of items) {
+      if (item.type.startsWith("image/")) {
+        e.preventDefault()
+        const file = item.getAsFile()
+        if (!file) continue
+
+        // Upload image directly
+        const formData = new FormData()
+        formData.append("file", file)
+
+        try {
+          const res = await fetch("/api/upload", { method: "POST", body: formData })
+          const data = await res.json()
+          if (data.url) {
+            const imageMd = `\n![${file.name}](${data.url})\n`
+            setContent((prev) => prev + imageMd)
+          }
+        } catch (error) {
+          console.error("Upload failed", error)
+        }
+        break
+      }
+    }
+  }
+
   // Auto-generate slug from title
   useEffect(() => {
     if (!isEditing && title && !slug) {
@@ -79,32 +124,102 @@ export default function EditorPage({ searchParams }: { searchParams: Promise<{ i
     }
   }, [title, isEditing])
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Handle image selection from toolbar
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+    setImageModalData({ file })
+    setImageModalOpen(true)
+  }
 
-    setUploading(true)
-    const formData = new FormData()
-    formData.append("file", file)
+  // Upload image
+  const handleImageUpload = async () => {
+    if (!imageModalData) return
+    setImageUploading(true)
 
     try {
-      const res = await fetch("/api/upload", {
-        method: "POST",
-        body: formData,
-      })
+      const formData = new FormData()
+      formData.append("file", imageModalData.file)
+
+      const res = await fetch("/api/upload", { method: "POST", body: formData })
       const data = await res.json()
 
       if (data.url) {
-        // Insert image URL at cursor position or append
-        const imageMd = `![${file.name}](${data.url})`
-        setContent((prev) => prev + "\n" + imageMd)
+        // Insert markdown image at cursor
+        const imageMd = `\n![${imageModalData.file.name}](${data.url})\n`
+        setContent((prev) => prev + imageMd)
+        setImageModalOpen(false)
+        setImageModalData(null)
       } else {
-        alert(data.error || "Upload failed")
+        alert(data.error || "上传失败")
       }
     } catch (error) {
-      alert("Upload failed")
+      alert("上传失败")
     } finally {
-      setUploading(false)
+      setImageUploading(false)
+    }
+  }
+
+  // Cover image upload
+  const handleCoverSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    const formData = new FormData()
+    formData.append("file", file)
+
+    fetch("/api/upload", { method: "POST", body: formData })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.url) {
+          setCoverImage(data.url)
+        } else {
+          alert(data.error || "上传失败")
+        }
+      })
+      .catch(() => alert("上传失败"))
+  }
+
+  // Insert Demo
+  const handleInsertDemo = () => {
+    if (!demoIdInput.trim()) {
+      alert("请输入 Demo ID")
+      return
+    }
+    const demoMd = `\n<Demo id="${demoIdInput.trim()}" />\n`
+    setContent((prev) => prev + demoMd)
+    setDemoIdInput("")
+    setDemoModalOpen(false)
+  }
+
+  // Upload Demo file
+  const [demoFile, setDemoFile] = useState<File | null>(null)
+  const handleDemoFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setDemoFile(file)
+    setDemoUploading(true)
+
+    try {
+      const formData = new FormData()
+      formData.append("file", file)
+
+      const res = await fetch("/api/upload", { method: "POST", body: formData })
+      const data = await res.json()
+
+      if (data.url) {
+        // Insert demo with key as id and src as url
+        const demoMd = `\n<Demo id="${data.key}" src="${data.url}" />\n`
+        setContent((prev) => prev + demoMd)
+        setDemoModalOpen(false)
+        setDemoFile(null)
+      } else {
+        alert(data.error || "上传失败")
+      }
+    } catch (error) {
+      alert("上传失败")
+    } finally {
+      setDemoUploading(false)
     }
   }
 
@@ -133,15 +248,14 @@ export default function EditorPage({ searchParams }: { searchParams: Promise<{ i
       })
 
       const data = await res.json()
-
       if (!res.ok) {
-        alert(data.error || "Save failed")
+        alert(data.error || "保存失败")
         return
       }
 
       router.push(`/articles/${data.slug}`)
     } catch (error) {
-      alert("Save failed")
+      alert("保存失败")
     } finally {
       setSaving(false)
     }
@@ -159,12 +273,9 @@ export default function EditorPage({ searchParams }: { searchParams: Promise<{ i
     <div className="min-h-screen pb-12">
       {/* Header */}
       <div className="sticky top-0 z-10 bg-background border-b border-border px-6 lg:px-8 py-4">
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Link
-              href="/articles"
-              className="flex items-center gap-2 text-muted-foreground hover:text-foreground"
-            >
+            <Link href="/articles" className="flex items-center gap-2 text-muted-foreground hover:text-foreground">
               <ArrowLeft className="w-4 h-4" />
               返回
             </Link>
@@ -184,127 +295,187 @@ export default function EditorPage({ searchParams }: { searchParams: Promise<{ i
 
       {/* Form */}
       <div className="px-6 lg:px-8 py-8">
-        <div className="max-w-4xl mx-auto space-y-6">
+        <div className="max-w-7xl mx-auto space-y-6">
           {/* Basic Info */}
           <Card>
             <CardHeader>
               <CardTitle>基本信息</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="title">标题</Label>
-                <Input
-                  id="title"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="输入文章标题"
-                  required
-                />
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="title">标题</Label>
+                  <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="输入文章标题" required />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="slug">URL Slug</Label>
+                  <Input id="slug" value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="article-url-slug" />
+                </div>
               </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="slug">URL Slug</Label>
-                <Input
-                  id="slug"
-                  value={slug}
-                  onChange={(e) => setSlug(e.target.value)}
-                  placeholder="article-url-slug"
-                />
-                <p className="text-xs text-muted-foreground">
-                  用于生成文章 URL: /articles/[slug]
-                </p>
-              </div>
-
               <div className="space-y-2">
                 <Label htmlFor="excerpt">摘要</Label>
-                <Textarea
-                  id="excerpt"
-                  value={excerpt}
-                  onChange={(e) => setExcerpt(e.target.value)}
-                  placeholder="文章摘要（可选）"
-                  rows={3}
-                />
+                <Textarea id="excerpt" value={excerpt} onChange={(e) => setExcerpt(e.target.value)} placeholder="文章摘要" rows={2} />
               </div>
-
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="category">分类</Label>
                   <Select value={categoryId} onValueChange={setCategoryId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="选择分类" />
-                    </SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder="选择分类" /></SelectTrigger>
                     <SelectContent>
                       {categories.map((cat) => (
-                        <SelectItem key={cat.id} value={cat.id}>
-                          {cat.name}
-                        </SelectItem>
+                        <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
-
                 <div className="space-y-2">
-                  <Label htmlFor="cover">封面图片 URL</Label>
-                  <Input
-                    id="cover"
-                    value={coverImage}
-                    onChange={(e) => setCoverImage(e.target.value)}
-                    placeholder="https://..."
-                  />
+                  <Label>封面图片</Label>
+                  <input ref={coverInputRef} type="file" accept="image/*" onChange={handleCoverSelect} className="hidden" />
+                  {coverImage ? (
+                    <div className="relative w-full h-32 rounded-lg overflow-hidden border border-border">
+                      <img src={coverImage} alt="Cover" className="w-full h-full object-cover" />
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        className="absolute top-2 right-2"
+                        onClick={() => coverInputRef.current?.click()}
+                      >
+                        更换封面
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button variant="outline" className="w-full h-32" onClick={() => coverInputRef.current?.click()}>
+                      <ImagePlus className="w-6 h-6 mr-2" />
+                      上传封面图片
+                    </Button>
+                  )}
                 </div>
               </div>
-
               <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="published"
-                  checked={published}
-                  onChange={(e) => setPublished(e.target.checked)}
-                  className="w-4 h-4"
-                />
-                <Label htmlFor="published" className="cursor-pointer">
-                  发布文章（取消勾选则为草稿）
-                </Label>
+                <input type="checkbox" id="published" checked={published} onChange={(e) => setPublished(e.target.checked)} className="w-4 h-4" />
+                <Label htmlFor="published" className="cursor-pointer">发布文章</Label>
               </div>
             </CardContent>
           </Card>
 
-          {/* Content */}
+          {/* MD Editor */}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>文章内容 (MDX)</CardTitle>
+              <CardTitle>文章内容</CardTitle>
               <div className="flex items-center gap-2">
-                <Label htmlFor="image-upload" className="cursor-pointer">
-                  <Button variant="outline" size="sm" asChild>
-                    <span>
-                      <Upload className="w-4 h-4 mr-2" />
-                      {uploading ? "上传中..." : "上传图片"}
-                    </span>
-                  </Button>
-                </Label>
-                <input
-                  id="image-upload"
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageUpload}
-                  className="hidden"
-                />
+                <input ref={imageInputRef} type="file" accept="image/*" onChange={handleImageSelect} className="hidden" />
+                <Button variant="outline" size="sm" onClick={() => imageInputRef.current?.click()}>
+                  <ImagePlus className="w-4 h-4 mr-2" />
+                  插入图片
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setDemoModalOpen(true)}>
+                  <Box className="w-4 h-4 mr-2" />
+                  插入 Demo
+                </Button>
               </div>
             </CardHeader>
             <CardContent>
-              <Textarea
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                placeholder="使用 Markdown 编写文章内容..."
-                className="min-h-[500px] font-mono text-sm"
-              />
-              <p className="text-xs text-muted-foreground mt-2">
-                支持 Markdown 语法。图片会上传到 R2 并替换为 URL。
-              </p>
+              <div data-color-mode="light" className="md-editor-wrapper" onPaste={handlePaste}>
+                <MdEditor
+                  value={content}
+                  onChange={(val) => setContent(val || "")}
+                  height="500px"
+                  preview="live"
+                  style={{ padding: "16px" }}
+                />
+              </div>
             </CardContent>
           </Card>
         </div>
       </div>
+
+      {/* Image Upload Modal */}
+      {imageModalOpen && imageModalData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <Card className="w-full max-w-md mx-4">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>上传图片</CardTitle>
+              <Button variant="ghost" size="icon" onClick={() => setImageModalOpen(false)}>
+                <X className="w-4 h-4" />
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center gap-4">
+                <div className="w-20 h-20 bg-muted rounded-lg flex items-center justify-center overflow-hidden">
+                  <img src={URL.createObjectURL(imageModalData.file)} alt="Preview" className="w-full h-full object-cover" />
+                </div>
+                <div>
+                  <p className="font-medium">{imageModalData.file.name}</p>
+                  <p className="text-sm text-muted-foreground">{(imageModalData.file.size / 1024).toFixed(1)} KB</p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" className="flex-1" onClick={() => setImageModalOpen(false)}>取消</Button>
+                <Button className="flex-1" onClick={handleImageUpload} disabled={imageUploading}>
+                  {imageUploading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />上传中...</> : <><Upload className="w-4 h-4 mr-2" />上传</>}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Demo Insert Modal */}
+      {demoModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <Card className="w-full max-w-md mx-4">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>插入 Demo</CardTitle>
+              <Button variant="ghost" size="icon" onClick={() => setDemoModalOpen(false)}>
+                <X className="w-4 h-4" />
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="demoId">Demo ID</Label>
+                <Input
+                  id="demoId"
+                  value={demoIdInput}
+                  onChange={(e) => setDemoIdInput(e.target.value)}
+                  placeholder="输入已有的 Demo ID"
+                />
+                <p className="text-xs text-muted-foreground">使用已有的 Demo ID，如: jvm-memory, classloader</p>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" className="flex-1" onClick={() => setDemoModalOpen(false)}>取消</Button>
+                <Button
+                  className="flex-1"
+                  onClick={handleInsertDemo}
+                  disabled={!demoIdInput.trim()}
+                >
+                  插入
+                </Button>
+              </div>
+              <div className="relative">
+                <Button
+                  variant="secondary"
+                  className="w-full"
+                  disabled={demoUploading}
+                >
+                  {demoUploading ? (
+                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" />上传中...</>
+                  ) : demoFile ? (
+                    <><Check className="w-4 h-4 mr-2" />已选择: {demoFile.name}</>
+                  ) : (
+                    <><Upload className="w-4 h-4 mr-2" />上传 HTML 文件创建新 Demo</>
+                  )}
+                </Button>
+                <input
+                  type="file"
+                  accept=".html"
+                  onChange={handleDemoFileUpload}
+                  className="absolute inset-0 opacity-0 cursor-pointer"
+                />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   )
 }
