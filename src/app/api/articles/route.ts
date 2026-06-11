@@ -17,6 +17,7 @@ export async function GET(request: NextRequest) {
       category:categories(*),
       tags:article_tags(tag:tags(*))
     `)
+    .is("deleted_at", null)
     .order("created_at", { ascending: false })
 
   if (published !== null) {
@@ -51,7 +52,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const { title, slug, excerpt, content, cover_image, category_id, published } = body
+    const { title, slug, excerpt, content, cover_image, category_id, published, tags } = body
 
     if (!title || !slug || !content) {
       return NextResponse.json(
@@ -76,6 +77,21 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    // Add tags if provided
+    if (tags && Array.isArray(tags) && tags.length > 0) {
+      // Filter out temp IDs and get real tag IDs
+      const tagInserts = tags
+        .filter((tagId: string) => !tagId.startsWith("temp-"))
+        .map((tagId: string) => ({
+          article_id: data.id,
+          tag_id: tagId,
+        }))
+
+      if (tagInserts.length > 0) {
+        await supabase.from("article_tags").insert(tagInserts)
+      }
     }
 
     return NextResponse.json(data, { status: 201 })

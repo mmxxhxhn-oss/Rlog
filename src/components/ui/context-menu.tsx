@@ -60,8 +60,10 @@ export function ContextMenu({ items, children }: ContextMenuProps) {
           style={{ left: position.x, top: position.y }}
         >
           {items.map((item, index) => (
-            <button
+            <div
               key={index}
+              role="button"
+              tabIndex={0}
               className={cn(
                 "relative flex w-full cursor-pointer select-none items-center rounded-md px-3 py-2 text-sm outline-none transition-colors",
                 item.disabled
@@ -70,16 +72,27 @@ export function ContextMenu({ items, children }: ContextMenuProps) {
                     ? "text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
                     : "hover:bg-accent"
               )}
-              onClick={() => {
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
                 if (!item.disabled) {
                   item.onClick()
                   setOpen(false)
                 }
               }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault()
+                  if (!item.disabled) {
+                    item.onClick()
+                    setOpen(false)
+                  }
+                }
+              }}
             >
               {item.icon && <span className="mr-2 w-4 h-4">{item.icon}</span>}
               {item.label}
-            </button>
+            </div>
           ))}
         </div>
       )}
@@ -117,8 +130,10 @@ export function KebabMenu({ items }: { items: ContextMenuItem[] }) {
       {open && (
         <div className="absolute right-0 z-50 min-w-[180px] overflow-hidden rounded-lg border bg-popover p-1 shadow-lg animate-in fade-in-0 zoom-in-95">
           {items.map((item, index) => (
-            <button
+            <div
               key={index}
+              role="button"
+              tabIndex={0}
               className={cn(
                 "relative flex w-full cursor-pointer select-none items-center rounded-md px-3 py-2 text-sm outline-none transition-colors",
                 item.disabled
@@ -127,16 +142,27 @@ export function KebabMenu({ items }: { items: ContextMenuItem[] }) {
                     ? "text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
                     : "hover:bg-accent"
               )}
-              onClick={() => {
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
                 if (!item.disabled) {
                   item.onClick()
                   setOpen(false)
                 }
               }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault()
+                  if (!item.disabled) {
+                    item.onClick()
+                    setOpen(false)
+                  }
+                }
+              }}
             >
               {item.icon && <span className="mr-2 w-4 h-4">{item.icon}</span>}
               {item.label}
-            </button>
+            </div>
           ))}
         </div>
       )}

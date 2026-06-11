@@ -91,9 +91,10 @@ export async function PUT(
       // Delete existing tags
       await supabase.from("article_tags").delete().eq("article_id", id)
 
-      // Insert new tags
-      if (tags.length > 0) {
-        const tagInserts = tags.map((tagId: string) => ({
+      // Insert new tags (filter out temp IDs)
+      const realTags = tags.filter((tagId: string) => !tagId.startsWith("temp-"))
+      if (realTags.length > 0) {
+        const tagInserts = realTags.map((tagId: string) => ({
           article_id: id,
           tag_id: tagId,
         }))
@@ -115,12 +116,14 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params
+    console.log("DELETE article:", id)
     const supabase = await createClient()
 
     // Check auth
     const {
       data: { user },
     } = await supabase.auth.getUser()
+    console.log("User:", user?.id)
 
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -132,6 +135,7 @@ export async function DELETE(
       .select("user_id")
       .eq("id", id)
       .single()
+    console.log("Existing article:", existing)
 
     if (!existing) {
       return NextResponse.json({ error: "Article not found" }, { status: 404 })
@@ -146,6 +150,7 @@ export async function DELETE(
       .from("articles")
       .update({ deleted_at: new Date().toISOString() })
       .eq("id", id)
+    console.log("Delete error:", error)
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })

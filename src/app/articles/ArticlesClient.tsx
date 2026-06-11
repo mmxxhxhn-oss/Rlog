@@ -45,16 +45,8 @@ export function ArticlesClient({ categories, articles }: ArticlesClientProps) {
     return matchesCategory && matchesSearch
   })
 
-  // Context menu items for the page (shown on right-click anywhere)
-  const pageContextItems: ContextMenuItem[] = user
-    ? [
-        {
-          label: "新建文章",
-          icon: <Plus className="w-4 h-4" />,
-          onClick: () => router.push("/editor"),
-        },
-      ]
-    : []
+  // Page context menu items (no longer needed since button exists at top)
+  const pageContextItems: ContextMenuItem[] = []
 
   return (
     <ContextMenu items={pageContextItems}>
@@ -139,8 +131,17 @@ function ArticleCardWrapper({ article, user }: { article: Article; user: any }) 
           icon: <span>🗑️</span>,
           onClick: async () => {
             if (confirm(`确定要删除文章 "${article.title}" 吗？`)) {
-              await fetch(`/api/articles/${article.id}`, { method: "DELETE" })
-              window.location.reload()
+              console.log("Deleting article:", article.id)
+              const res = await fetch(`/api/articles/${article.id}`, {
+                method: "DELETE",
+              })
+              console.log("Delete response:", res.status, await res.text())
+              if (res.ok) {
+                window.location.reload()
+              } else {
+                const data = await res.json()
+                alert(data.error || "删除失败")
+              }
             }
           },
           danger: true,

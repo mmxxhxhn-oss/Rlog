@@ -11,8 +11,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ArrowLeft, Save, Upload, X, Loader2, Box, ImagePlus, Check } from "lucide-react"
-import type { Category } from "@/lib/db"
+import { ArrowLeft, Save, Upload, X, Loader2, Box, ImagePlus, Check, Tag, XCircle } from "lucide-react"
+import type { Category, Tag } from "@/lib/db"
 
 // 动态导入 MD 编辑器，避免 SSR 问题
 const MdEditor = dynamic(
@@ -25,6 +25,9 @@ export default function EditorPage({ searchParams }: { searchParams: Promise<{ i
   const router = useRouter()
   const { user, loading } = useAuth()
   const [categories, setCategories] = useState<Category[]>([])
+  const [tags, setTags] = useState<Tag[]>([])
+  const [selectedTags, setSelectedTags] = useState<Tag[]>([])
+  const [tagInput, setTagInput] = useState("")
   const [saving, setSaving] = useState(false)
   const [uploadingImage, setUploadingImage] = useState(false)
 
@@ -65,6 +68,13 @@ export default function EditorPage({ searchParams }: { searchParams: Promise<{ i
       })
       .catch(console.error)
 
+    fetch("/api/tags")
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) setTags(data)
+      })
+      .catch(console.error)
+
     if (params.id) {
       fetch(`/api/articles/${params.id}`)
         .then((res) => res.json())
@@ -77,6 +87,9 @@ export default function EditorPage({ searchParams }: { searchParams: Promise<{ i
             setCoverImage(data.cover_image || "")
             setCategoryId(data.category_id || "")
             setPublished(data.published || false)
+            if (data.tags) {
+              setSelectedTags(data.tags.slice(0, 3))
+            }
           }
         })
         .catch(console.error)
@@ -113,16 +126,33 @@ export default function EditorPage({ searchParams }: { searchParams: Promise<{ i
     }
   }
 
-  // Auto-generate slug from title
+  // Auto-generate slug from title and category
   useEffect(() => {
-    if (!isEditing && title && !slug) {
-      const generated = title
+    if (!isEditing && title) {
+      const categorySlug = categories.find(c => c.id === categoryId)?.slug || ""
+      const titleSlug = title
         .toLowerCase()
         .replace(/[^a-z0-9\u4e00-\u9fa5]+/g, "-")
         .replace(/^-+|-+$/g, "")
-      setSlug(generated)
+      const finalSlug = categorySlug ? `${categorySlug}-${titleSlug}` : titleSlug
+      if (!slug || slug !== finalSlug) {
+        setSlug(finalSlug)
+      }
     }
-  }, [title, isEditing])
+  }, [title, categoryId, categories, isEditing])
+
+  // Handle category change to regenerate slug
+  const handleCategoryChange = (newCategoryId: string) => {
+    setCategoryId(newCategoryId)
+    if (!isEditing && title) {
+      const categorySlug = categories.find(c => c.id === newCategoryId)?.slug || ""
+      const titleSlug = title
+        .toLowerCase()
+        .replace(/[^a-z0-9\u4e00-\u9fa5]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+      setSlug(categorySlug ? `${categorySlug}-${titleSlug}` : titleSlug)
+    }
+  }
 
   // Handle image selection from toolbar
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -223,6 +253,26 @@ export default function EditorPage({ searchParams }: { searchParams: Promise<{ i
     }
   }
 
+  // Handle tag input
+  const handleTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" && tagInput.trim()) {
+      e.preventDefault()
+      const existingTag = tags.find(t => t.name.toLowerCase() === tagInput.toLowerCase())
+      if (existingTag && !selectedTags.find(t => t.id === existingTag.id) && selectedTags.length < 3) {
+        setSelectedTags([...selectedTags, existingTag])
+      } else if (!existingTag && selectedTags.length < 3) {
+        // Create new tag locally (will be created on save if needed)
+        const newTag: Tag = { id: `temp-${Date.now()}`, name: tagInput.trim(), slug: tagInput.trim().toLowerCase().replace(/\s+/g, "-") }
+        setSelectedTags([...selectedTags, newTag])
+      }
+      setTagInput("")
+    }
+  }
+
+  const removeTag = (tagId: string) => {
+    setSelectedTags(selectedTags.filter(t => t.id !== tagId))
+  }
+
   const handleSubmit = async (e: React.FormEvent, saveAsDraft: boolean = false) => {
     e.preventDefault()
     setSaving(true)
@@ -234,7 +284,8 @@ export default function EditorPage({ searchParams }: { searchParams: Promise<{ i
       content,
       cover_image: coverImage || null,
       category_id: categoryId || null,
-      published: saveAsDraft ? false : published,
+      published: saveAsDraft ? false : true,
+      tags: selectedTags.map(t => t.id),
     }
 
     try {
@@ -319,7 +370,7 @@ export default function EditorPage({ searchParams }: { searchParams: Promise<{ i
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="category">分类</Label>
-                  <Select value={categoryId} onValueChange={setCategoryId}>
+                  <Select value={categoryId} onValueChange={handleCategoryChange}>
                     <SelectTrigger><SelectValue placeholder="选择分类" /></SelectTrigger>
                     <SelectContent>
                       {categories.map((cat) => (
@@ -351,9 +402,29 @@ export default function EditorPage({ searchParams }: { searchParams: Promise<{ i
                   )}
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <input type="checkbox" id="published" checked={published} onChange={(e) => setPublished(e.target.checked)} className="w-4 h-4" />
-                <Label htmlFor="published" className="cursor-pointer">发布文章</Label>
+              <div className="space-y-2">
+                <Label>标签（按回车添加，最多3个）</Label>
+                <div className="flex flex-wrap gap-2 p-3 border border-input rounded-lg bg-background">
+                  {selectedTags.map((tag) => (
+                    <span key={tag.id} className="inline-flex items-center gap-1 px-2 py-1 bg-muted rounded text-sm">
+                      <Tag className="w-3 h-3" />
+                      {tag.name}
+                      <button type="button" onClick={() => removeTag(tag.id)} className="ml-1 hover:text-destructive">
+                        <XCircle className="w-3 h-3" />
+                      </button>
+                    </span>
+                  ))}
+                  {selectedTags.length < 3 && (
+                    <input
+                      type="text"
+                      value={tagInput}
+                      onChange={(e) => setTagInput(e.target.value)}
+                      onKeyDown={handleTagKeyDown}
+                      placeholder="输入标签名后按回车"
+                      className="flex-1 min-w-[150px] bg-transparent outline-none text-sm"
+                    />
+                  )}
+                </div>
               </div>
             </CardContent>
           </Card>
