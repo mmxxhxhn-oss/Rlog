@@ -262,7 +262,12 @@ export default function EditorPage({ searchParams }: { searchParams: Promise<{ i
         setSelectedTags([...selectedTags, existingTag])
       } else if (!existingTag && selectedTags.length < 3) {
         // Create new tag locally (will be created on save if needed)
-        const newTag: Tag = { id: `temp-${Date.now()}`, name: tagInput.trim(), slug: tagInput.trim().toLowerCase().replace(/\s+/g, "-") }
+        const newTag: Tag = {
+          id: `temp-${Date.now()}`,
+          name: tagInput.trim(),
+          slug: tagInput.trim().toLowerCase().replace(/\s+/g, "-"),
+          color: "blue"
+        }
         setSelectedTags([...selectedTags, newTag])
       }
       setTagInput("")

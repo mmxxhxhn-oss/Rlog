@@ -3,6 +3,10 @@ import { Clock, Eye, Tag as TagIcon } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import type { Article } from "@/lib/db"
 
+interface ArticleCardProps {
+  article: Article
+}
+
 // Placeholder icon SVG (simple document icon)
 const PlaceholderIcon = () => (
   <svg className="w-8 h-8 text-muted-foreground/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
