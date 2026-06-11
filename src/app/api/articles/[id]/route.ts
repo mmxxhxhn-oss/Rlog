@@ -126,36 +126,42 @@ export async function DELETE(
     console.log("User:", user?.id)
 
     if (!user) {
+      console.log("No user - returning 401")
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Check ownership
-    const { data: existing } = await supabase
+    // Check article exists
+    const { data: existing, error: selectError } = await supabase
       .from("articles")
       .select("user_id")
       .eq("id", id)
       .single()
-    console.log("Existing article:", existing)
+    console.log("Existing article:", existing, "Select error:", selectError)
 
-    if (!existing) {
+    if (selectError || !existing) {
+      console.log("Article not found")
       return NextResponse.json({ error: "Article not found" }, { status: 404 })
     }
 
+    // Check ownership (skip if user_id is null)
     if (existing.user_id && existing.user_id !== user.id) {
+      console.log("Forbidden - user_id mismatch")
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
-    // Soft delete
-    const { error } = await supabase
+    // Soft delete - use update with deleted_at timestamp
+    const { error: updateError } = await supabase
       .from("articles")
       .update({ deleted_at: new Date().toISOString() })
       .eq("id", id)
-    console.log("Delete error:", error)
+    console.log("Update error:", updateError)
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
+    if (updateError) {
+      console.log("Update failed with error:", updateError)
+      return NextResponse.json({ error: updateError.message }, { status: 500 })
     }
 
+    console.log("Delete successful")
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("Delete article error:", error)

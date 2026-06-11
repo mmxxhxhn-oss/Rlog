@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ArrowLeft, Save, Upload, X, Loader2, Box, ImagePlus, Check, Tag, XCircle } from "lucide-react"
+import { ArrowLeft, Save, Upload, X, Loader2, Box, ImagePlus, Check, Tag as TagIcon, XCircle } from "lucide-react"
 import type { Category, Tag } from "@/lib/db"
 
 // 动态导入 MD 编辑器，避免 SSR 问题
@@ -407,7 +407,7 @@ export default function EditorPage({ searchParams }: { searchParams: Promise<{ i
                 <div className="flex flex-wrap gap-2 p-3 border border-input rounded-lg bg-background">
                   {selectedTags.map((tag) => (
                     <span key={tag.id} className="inline-flex items-center gap-1 px-2 py-1 bg-muted rounded text-sm">
-                      <Tag className="w-3 h-3" />
+                      <TagIcon className="w-3 h-3" />
                       {tag.name}
                       <button type="button" onClick={() => removeTag(tag.id)} className="ml-1 hover:text-destructive">
                         <XCircle className="w-3 h-3" />
