@@ -266,7 +266,8 @@ export default function EditorPage({ searchParams }: { searchParams: Promise<{ i
           id: `temp-${Date.now()}`,
           name: tagInput.trim(),
           slug: tagInput.trim().toLowerCase().replace(/\s+/g, "-"),
-          color: "blue"
+          color: "blue",
+          created_at: new Date().toISOString()
         }
         setSelectedTags([...selectedTags, newTag])
       }
