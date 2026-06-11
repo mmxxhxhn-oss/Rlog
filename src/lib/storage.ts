@@ -34,7 +34,13 @@ function getConfig(): StorageConfig {
   const urlExpiration = parseInt(process.env.STORAGE_URL_EXPIRATION || "3600")
 
   if (!endpoint || !accessKeyId || !secretAccessKey || !bucket) {
-    throw new Error("Storage configuration is missing")
+    console.error("Missing storage config:", {
+      hasEndpoint: !!endpoint,
+      hasAccessKey: !!accessKeyId,
+      hasSecretKey: !!secretAccessKey,
+      hasBucket: !!bucket,
+    })
+    throw new Error("Storage configuration is missing. Check STORAGE_ENDPOINT, STORAGE_ACCESS_KEY, STORAGE_SECRET_KEY, STORAGE_BUCKET environment variables.")
   }
 
   return {

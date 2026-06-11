@@ -12,15 +12,17 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "No key provided" }, { status: 400 })
     }
 
-    const client = getStorageClient()
-    const config = {
-      bucket: process.env.STORAGE_BUCKET!,
+    const bucket = process.env.STORAGE_BUCKET
+    if (!bucket) {
+      return NextResponse.json({ error: "Storage not configured" }, { status: 500 })
     }
+
+    const client = getStorageClient()
 
     // Get object directly from S3
     const response = await client.send(
       new GetObjectCommand({
-        Bucket: config.bucket,
+        Bucket: bucket,
         Key: decodeURIComponent(key),
       })
     )
